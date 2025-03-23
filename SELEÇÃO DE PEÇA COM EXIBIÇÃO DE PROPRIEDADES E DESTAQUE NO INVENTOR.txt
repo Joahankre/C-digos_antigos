@@ -1,0 +1,49 @@
+'Code by @ClintBrown3D
+'Originally posted at https://clintbrown.co.uk/ilogic-properties-tool-tip-3
+'This is an updated version of the code found here: https://clintbrown.co.uk/iproperty-tool-tip-with-ilogic-updated
+
+'Início da execução
+TheStart:
+On Error GoTo ClintBrown3D 'Define o comportamento em caso de erro
+
+'Obtém o documento ativo no Inventor
+Dim doc = ThisApplication.ActiveDocument
+
+'Permite que o usuário selecione uma ocorrência de montagem (parte) na árvore de componentes
+Dim entity = ThisApplication.CommandManager.Pick(SelectionFilterEnum.kAssemblyLeafOccurrenceFilter, "Selecione uma peça 🙂 - ou ESC para sair")
+
+'Verifica se a seleção foi feita (se a entidade não é nada)
+If (Not entity Is Nothing) Then
+    'Obtém informações da peça selecionada a partir de suas propriedades de projeto
+    oOne = "Part Number: " & iProperties.Value(entity.Name, "Project", "Part Number") 'Número da peça
+    oTwo = "Mass: " & Round(iProperties.MassOfComponent(entity.Name), 2) & " kg" 'Massa da peça
+    oThree = "Material: " & iProperties.MaterialOfComponent(entity.Name) 'Material da peça
+    oFour = "Designer: " & iProperties.Value(entity.Name, "Project", "Designer") 'Designer da peça
+    oFive = "Description: " & iProperties.Value(entity.Name, "Project", "Description") 'Descrição da peça
+    
+    'Se a descrição estiver vazia, mostra o nome do arquivo no campo de descrição
+    If iProperties.Value(entity.Name, "Project", "Description") = "" Then : oFive = "Description: " & entity.Name : End If
+
+    'Criação de um conjunto de destaque para a peça selecionada
+    Dim oSet1 As HighlightSet  
+    oSet1 = doc.CreateHighlightSet 'Cria um conjunto de destaque
+    oSet1.Color = ThisApplication.TransientObjects.CreateColor(255, 125, 0) 'Define a cor do destaque
+    Call oSet1.AddItem(entity) 'Adiciona a peça ao conjunto de destaque
+
+    'Exibe um prompt de seleção ao usuário, mostrando as informações da peça selecionada
+    bob = ThisApplication.CommandManager.Pick(SelectionFilterEnum.kAssemblyLeafOccurrenceFilter, (oOne & " - " & oTwo & " - "  & oThree & " - "  & oFour & " - "  & oFive))
+    bob = "" 'Limpa a variável 'bob' após a seleção
+    Call oSet1.Clear 'Limpa o conjunto de destaque após a seleção
+End If
+
+'Se a seleção não for feita (ESC pressionado), permite que o código saia
+If (Not entity Is Nothing) Then  
+    'Retorna ao início do processo para permitir uma nova seleção
+    GoTo TheStart:
+End If
+
+'Finaliza o código
+Return 
+
+'Caso ocorra um erro, o controle será transferido para aqui
+ClintBrown3D:

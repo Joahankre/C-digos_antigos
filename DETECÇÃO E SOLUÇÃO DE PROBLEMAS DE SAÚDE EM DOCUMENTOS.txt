@@ -1,0 +1,170 @@
+Public Class ThisRule
+    Public Sub Main()
+
+        Dim doc As Document = ThisDoc.Document
+
+        ' Cria um objeto para encontrar problemas no documento
+        Dim problemFinder As New ProblemFinder(doc)
+
+        ' Obtém a lista de problemas encontrados
+        Dim problems As List(Of HealtProblem) = problemFinder.Problems
+
+        ' Se não houver problemas, exibe uma mensagem e encerra
+        If (problems.Count = 0) Then
+            MsgBox("Nenhum problema encontrado!")
+            Return
+        End If
+
+        ' Solicita ao usuário que selecione o problema que deseja resolver
+        Dim selectedProblem As HealtProblem = InputListBox(
+            "Selecione o problema que você deseja resolver hoje.",
+            problems, problems.Item(1),
+            Title := "Design Doctor",
+            ListName := "Problemas",
+            Width := 600,
+            Height := 400)
+
+        If selectedProblem Is Nothing Then Return
+
+        ' Abre o documento relacionado ao problema selecionado
+        ThisApplication.Documents.Open(selectedProblem.Document.FullFileName)
+
+        ' Destaca o problema no navegador
+        HiglightInBrowser(selectedProblem)
+    End Sub
+
+    Public Sub HiglightInBrowser(problem As HealtProblem)
+        Try
+            ' Obtém a definição do nó nativo no navegador para o objeto do problema
+            Dim oNativeBrowserNodeDef As NativeBrowserNodeDefinition = problem.Document.BrowserPanes.
+            GetNativeBrowserNodeDefinition(problem.ProblemObject)
+            
+            ' Obtém o nó superior do navegador do documento
+            Dim oTopBrowserNode As BrowserNode = problem.Document.BrowserPanes.ActivePane.TopNode
+
+            ' Obtém o nó do plano de trabalho no navegador
+            Dim oWorkPlaneNode As BrowserNode = oTopBrowserNode.AllReferencedNodes(oNativeBrowserNodeDef).Item(1)
+
+            ' Expande e recolhe o nó do plano de trabalho
+            oWorkPlaneNode.Expanded = True
+            oWorkPlaneNode.Expanded = False
+
+            ' Limpa e seleciona o objeto relacionado ao problema
+            problem.Document.SelectSet.Clear()
+            problem.Document.SelectSet.Select(problem.ProblemObject)
+        Catch ex As Exception
+            ' Se houver erro, exibe uma mensagem
+            Dim msg = String.Format("Não foi possível selecionar o nó do problema no documento: " & problem.Document.DisplayName)
+        End Try
+    End Sub
+End Class
+
+Public Class ProblemFinder
+    Public Property Problems As New List(Of HealtProblem)
+
+    ' Construtor que inicializa a busca por problemas no documento
+    Sub New(doc As Document)
+
+        ' Verifica o tipo de documento e chama a função apropriada para encontrar problemas
+        If (doc.DocumentType = DocumentTypeEnum.kPartDocumentObject) Then
+            FindPartProblems(doc)
+        ElseIf (doc.DocumentType = DocumentTypeEnum.kAssemblyDocumentObject) Then
+            FindAssemblyProblems(doc)
+        End If
+
+        ' Procura por problemas em documentos de peças referenciados
+        Dim partDocs = doc.AllReferencedDocuments.Cast(Of Document).
+            Where(Function(d) d.DocumentType = DocumentTypeEnum.kPartDocumentObject).ToList()
+        For Each partDoc As PartDocument In partDocs
+            FindPartProblems(partDoc)
+        Next
+
+        ' Procura por problemas em documentos de montagens referenciados
+        Dim assemblyDocs = doc.AllReferencedDocuments.Cast(Of Document).
+            Where(Function(d) d.DocumentType = DocumentTypeEnum.kAssemblyDocumentObject).ToList()
+        For Each assemblyDoc As AssemblyDocument In assemblyDocs
+            FindAssemblyProblems(assemblyDoc)
+        Next
+    End Sub
+
+    ' Encontra problemas em documentos de montagem
+    Public Sub FindAssemblyProblems(doc As AssemblyDocument)
+        FindProblemsInList(doc, doc.ComponentDefinition.Constraints.Cast(Of AssemblyConstraint))
+        FindProblemsInList(doc, doc.ComponentDefinition.Sketches.Cast(Of PlanarSketch))
+        FindProblemsInList(doc, doc.ComponentDefinition.OccurrencePatterns.Cast(Of OccurrencePattern))
+        FindProblemsInList(doc, doc.ComponentDefinition.WorkPlanes.Cast(Of WorkPlane))
+        FindProblemsInList(doc, doc.ComponentDefinition.Parameters.Cast(Of Parameter))
+    End Sub
+
+    ' Encontra problemas em documentos de peça
+    Public Sub FindPartProblems(doc As PartDocument)
+        FindProblemsInList(doc, doc.ComponentDefinition.Features.Cast(Of PartFeature))
+        FindProblemsInList(doc, doc.ComponentDefinition.Sketches.Cast(Of PlanarSketch))
+        FindProblemsInList(doc, doc.ComponentDefinition.WorkPlanes.Cast(Of WorkPlane))
+        FindProblemsInList(doc, doc.ComponentDefinition.Parameters.Cast(Of Parameter))
+        FindProblemsInList(doc, doc.ComponentDefinition.ModelAnnotations.Cast(Of ModelAnnotation))
+    End Sub
+
+    ' Verifica a lista de objetos no documento e encontra problemas
+    Public Sub FindProblemsInList(doc As Document, list As IEnumerable(Of Object))
+        Try
+            For Each obj As Object In list
+                ' Se o status de saúde do objeto for problemático, adiciona à lista de problemas
+                If (obj.HealthStatus = HealthStatusEnum.kCannotComputeHealth Or
+                    obj.HealthStatus = HealthStatusEnum.kDeletedHealth Or
+                    obj.HealthStatus = HealthStatusEnum.kDriverLostHealth Or
+                    obj.HealthStatus = HealthStatusEnum.kInconsistentHealth Or
+                    obj.HealthStatus = HealthStatusEnum.kInErrorHealth Or
+                    obj.HealthStatus = HealthStatusEnum.kInvalidLimitsHealth Or
+                    obj.HealthStatus = HealthStatusEnum.kJointDOFLockedHealth Or
+                    obj.HealthStatus = HealthStatusEnum.kNewlyAddedHealth Or
+                    obj.HealthStatus = HealthStatusEnum.kOutOfDateHealth Or
+                    obj.HealthStatus = HealthStatusEnum.kRedundantHealth Or
+                    obj.HealthStatus = HealthStatusEnum.kUnknownHealth) Then
+
+                    Problems.Add(New HealtProblem(doc, obj))
+                End If
+            Next
+        Catch ex As Exception
+            ' Se houver erro, exibe uma mensagem
+            MsgBox("Problemas ao analisar problemas no documento: " & doc.DisplayName)
+        End Try
+    End Sub
+
+End Class
+
+' Copyright 2022
+'
+' Este código foi escrito por Jelte de Jong e publicado em www.hjalte.nl
+'
+' Permissão é concedida, sem custos, para qualquer pessoa que obtenha uma cópia deste
+' software e arquivos de documentação associados (o "Software"), para lidar com o Software
+' sem restrição, incluindo, sem limitação, os direitos de usar, copiar, modificar, combinar,
+' publicar, distribuir, sublicenciar e/ou vender cópias do Software, e permitir que as pessoas
+' a quem o Software for fornecido o façam, sujeitas às seguintes condições:
+'
+' O aviso de copyright acima e este aviso de permissão devem ser incluídos em todas as cópias ou
+' porções substanciais do Software.
+'
+' O SOFTWARE É FORNECIDO "COMO ESTÁ", SEM GARANTIAS DE QUALQUER TIPO, EXPRESSA OU IMPLÍCITA,
+' INCLUINDO, MAS NÃO SE LIMITANDO ÀS GARANTIAS DE COMERCIABILIDADE, ADEQUAÇÃO PARA UM FIM ESPECÍFICO
+' E NÃO INFRAÇÃO. EM NENHUM CASO OS AUTORES OU DETENTORES DE COPYRIGHT SERÃO RESPONSÁVEIS POR QUAISQUER
+' RECLAMAÇÕES, DANOS OU OUTRAS RESPONSABILIDADES, SEJA EM UMA AÇÃO DE CONTRATO, TORTO OU
+' DE OUTRA FORMA, DECORRENTES DE OU EM CONEXÃO COM O SOFTWARE OU O USO OU OUTRAS
+' NEGOCIAÇÕES NO SOFTWARE.
+
+Public Class HealtProblem
+    Public Sub New(doc As Document, problemObject As Object)
+        Me.Document = doc
+        Me.ProblemObject = problemObject
+    End Sub
+    Public Property Document As Document
+    Public Property ProblemObject As Object
+
+    ' Converte o problema para string para exibição
+    Public Overrides Function ToString() As String
+        Return String.Format("{0}: {1} ({2})",
+            Document.DisplayName, ProblemObject.Name,
+                       CType(ProblemObject.HealthStatus, HealthStatusEnum).ToString())
+    End Function
+End Class
