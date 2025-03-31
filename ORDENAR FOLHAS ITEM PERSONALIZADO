@@ -81,10 +81,10 @@ End Sub
 
 ' Função privada que compara duas folhas com base no número extraído do nome
 Private Function Comparador(x As Sheet, y As Sheet) As Integer
-    ' Usa uma expressão regular para extrair o número relevante da cadeia de caracteres
-    Dim regex As New System.Text.RegularExpressions.Regex("\d+(\.\d+)*") ' Padrão para capturar números como 1, 1.1, 1.1.1, 2.9, etc.
+    ' Usa uma expressão regular para extrair o número relevante da cadeia de caracteres (ignorando prefixos)
+    Dim regex As New System.Text.RegularExpressions.Regex("\d+(\.\d+)*") ' Padrão para capturar números como 1, 1.1, 1.2, 2.9, etc.
     
-    ' Extrai os números relevantes dos nomes das folhas (ignorando prefixos)
+    ' Extrai os números relevantes dos nomes das folhas (ignorando os prefixos)
     Dim numeroX As List(Of Integer) = ExtrairNumero(x.Name, regex)
     Dim numeroY As List(Of Integer) = ExtrairNumero(y.Name, regex)
     
@@ -102,27 +102,36 @@ End Function
 
 ' Função auxiliar para extrair o número relevante (como uma lista de inteiros) de uma string
 Private Function ExtrairNumero(nome As String, regex As System.Text.RegularExpressions.Regex) As List(Of Integer)
+    ' Remove o prefixo de 2 dígitos, como "01", "02", etc.
+    nome = RemovePrefixo(nome)
+    
     Dim match As System.Text.RegularExpressions.Match = regex.Match(nome)
     Dim numeros As New List(Of Integer)
     
     If match.Success Then
-        ' Divida a string no caso de múltiplos números, ignorando os prefixos como 01, 02, 03...
-        ' Vamos ignorar qualquer parte que comece com "0" ou um número com apenas um dígito
+        ' Divide a string capturada no caso de múltiplos números, como "1", "1.1", "1.2", "6.3"
         Dim partes() As String = match.Value.Split(".")
         
-        ' Verifique se o número encontrado é relevante (não é um número de prefixo)
+        ' Verifica se o número encontrado é relevante (não é um número de prefixo)
         For Each parte As String In partes
-            ' Verifica se o número tem mais de um dígito (por exemplo, "7" em vez de "01")
-            If parte.Length > 1 OrElse (parte.Length = 1 AndAlso Not parte.StartsWith("0")) Then
-                numeros.Add(Convert.ToInt32(parte)) ' Converte para inteiro e adiciona à lista
-            End If
+            ' Adiciona à lista de números
+            numeros.Add(Convert.ToInt32(parte))
         Next
     End If
 
-    ' Se não houver números relevantes, considere o número como 0
+    ' Se não houver números relevantes, considera o número como 0
     If numeros.Count = 0 Then
         numeros.Add(0)
     End If
     
     Return numeros
+End Function
+
+' Função para remover o prefixo de 2 dígitos no início do nome da folha, se existir
+Private Function RemovePrefixo(nome As String) As String
+    ' Verifica se o nome começa com um número de 2 dígitos seguido de um traço (como "01-", "02-", etc.)
+    Dim prefixoRegex As New System.Text.RegularExpressions.Regex("^\d{2}-")
+    
+    ' Se encontrar um prefixo, remove-o
+    Return prefixoRegex.Replace(nome, "")
 End Function
