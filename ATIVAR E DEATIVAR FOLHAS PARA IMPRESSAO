@@ -1,0 +1,198 @@
+Sub Main()
+    Dim drawDoc As DrawingDocument = ThisDoc.Document
+
+    Dim modoSelecao As String = SelecionarModoComListBox()
+    If String.IsNullOrEmpty(modoSelecao) Then
+        MessageBox.Show("Nenhuma opção foi selecionada.", "Operação Cancelada", MessageBoxButtons.OK, MessageBoxIcon.Warning)
+        Exit Sub
+    End If
+
+    Select Case modoSelecao
+        Case "1 - Começar a partir de uma página até o final"
+            SelecionarFolhasPorInicio(drawDoc)
+        Case "2 - Intervalo específico de páginas"
+            SelecionarFolhasPorIntervalo(drawDoc)
+        Case "3 - Selecionar folhas manualmente"
+            SelecionarFolhasManualmente(drawDoc)
+    End Select
+End Sub
+
+Function SelecionarModoComListBox() As String
+    Dim frm As New System.Windows.Forms.Form
+    frm.Text = "Selecionar Modo de Impressão"
+    frm.Width = 800
+    frm.Height = 600
+    frm.StartPosition = FormStartPosition.CenterScreen
+    frm.FormBorderStyle = FormBorderStyle.FixedDialog
+    frm.MinimizeBox = False
+    frm.MaximizeBox = False
+
+    Dim listBox As New System.Windows.Forms.ListBox
+    listBox.SetBounds(40, 40, 700, 400)
+    listBox.Items.Add("1 - Começar a partir de uma página até o final")
+    listBox.Items.Add("2 - Intervalo específico de páginas")
+    listBox.Items.Add("3 - Selecionar folhas manualmente")
+    listBox.SelectedIndex = 0
+
+    Dim btnOK As New System.Windows.Forms.Button
+    btnOK.Text = "OK"
+    btnOK.SetBounds(540, 470, 100, 40)
+    AddHandler btnOK.Click, Sub() frm.DialogResult = DialogResult.OK
+
+    Dim btnCancel As New System.Windows.Forms.Button
+    btnCancel.Text = "Cancelar"
+    btnCancel.SetBounds(650, 470, 100, 40)
+    AddHandler btnCancel.Click, Sub() frm.DialogResult = DialogResult.Cancel
+
+    frm.Controls.AddRange(New Control() {listBox, btnOK, btnCancel})
+
+    Dim result As DialogResult = frm.ShowDialog()
+    If result = DialogResult.OK Then
+        Return listBox.SelectedItem.ToString()
+    End If
+
+    Return Nothing
+End Function
+
+Sub SelecionarFolhasPorInicio(drawDoc As DrawingDocument)
+    Dim nomesFolhas As New List(Of String)
+    For Each folha As Sheet In drawDoc.Sheets
+        nomesFolhas.Add(folha.Name)
+    Next
+
+    Dim frm As New System.Windows.Forms.Form
+    frm.Text = "Selecionar Página de Início"
+    frm.Width = 800
+    frm.Height = 600
+    frm.StartPosition = FormStartPosition.CenterScreen
+    frm.FormBorderStyle = FormBorderStyle.FixedDialog
+
+    Dim listBox As New System.Windows.Forms.ListBox
+    listBox.SetBounds(40, 40, 700, 400)
+    listBox.SelectionMode = SelectionMode.One
+    For Each nome In nomesFolhas
+        listBox.Items.Add(nome)
+    Next
+    listBox.SelectedIndex = 0
+
+    Dim btnOK As New System.Windows.Forms.Button
+    btnOK.Text = "OK"
+    btnOK.SetBounds(640, 470, 100, 40)
+    AddHandler btnOK.Click, Sub() frm.DialogResult = DialogResult.OK
+
+    frm.Controls.AddRange(New Control() {listBox, btnOK})
+
+    If frm.ShowDialog() = DialogResult.OK Then
+        Dim nomeInicio As String = listBox.SelectedItem.ToString()
+        Dim iniciarContagem As Boolean = False
+
+        For Each folha As Sheet In drawDoc.Sheets
+            If folha.Name = nomeInicio Then
+                iniciarContagem = True
+            End If
+            folha.ExcludeFromPrinting = Not iniciarContagem
+        Next
+
+        MessageBox.Show("Folhas a partir de """ & nomeInicio & """ foram incluídas para impressão.", "Concluído", MessageBoxButtons.OK, MessageBoxIcon.Information)
+    End If
+End Sub
+
+Sub SelecionarFolhasPorIntervalo(drawDoc As DrawingDocument)
+    Dim nomesFolhas As New List(Of String)
+    For Each folha As Sheet In drawDoc.Sheets
+        nomesFolhas.Add(folha.Name)
+    Next
+
+    Dim frm As New System.Windows.Forms.Form
+    frm.Text = "Selecionar Intervalo de Folhas"
+    frm.Width = 850
+    frm.Height = 600
+    frm.StartPosition = FormStartPosition.CenterScreen
+    frm.FormBorderStyle = FormBorderStyle.FixedDialog
+
+    Dim lblInicio As New System.Windows.Forms.Label
+    lblInicio.Text = "Página Inicial:"
+    lblInicio.SetBounds(40, 20, 200, 20)
+
+    Dim lblFim As New System.Windows.Forms.Label
+    lblFim.Text = "Página Final:"
+    lblFim.SetBounds(420, 20, 200, 20)
+
+    Dim lbInicio As New System.Windows.Forms.ListBox
+    lbInicio.SetBounds(40, 50, 300, 400)
+
+    Dim lbFim As New System.Windows.Forms.ListBox
+    lbFim.SetBounds(420, 50, 300, 400)
+
+    For Each nome In nomesFolhas
+        lbInicio.Items.Add(nome)
+        lbFim.Items.Add(nome)
+    Next
+    lbInicio.SelectedIndex = 0
+    lbFim.SelectedIndex = nomesFolhas.Count - 1
+
+    Dim btnOK As New System.Windows.Forms.Button
+    btnOK.Text = "OK"
+    btnOK.SetBounds(640, 470, 100, 40)
+    AddHandler btnOK.Click, Sub() frm.DialogResult = DialogResult.OK
+
+    frm.Controls.AddRange(New Control() {lblInicio, lblFim, lbInicio, lbFim, btnOK})
+
+    If frm.ShowDialog() = DialogResult.OK Then
+        Dim idxInicio As Integer = lbInicio.SelectedIndex
+        Dim idxFim As Integer = lbFim.SelectedIndex
+
+        If idxInicio > idxFim Then
+            MessageBox.Show("A página inicial deve estar antes da final.", "Erro", MessageBoxButtons.OK, MessageBoxIcon.Error)
+            Exit Sub
+        End If
+
+        For i As Integer = 0 To drawDoc.Sheets.Count - 1
+            Dim folha As Sheet = drawDoc.Sheets.Item(i + 1)
+            folha.ExcludeFromPrinting = (i < idxInicio Or i > idxFim)
+        Next
+
+        MessageBox.Show("Folhas do intervalo selecionado foram incluídas para impressão.", "Concluído", MessageBoxButtons.OK, MessageBoxIcon.Information)
+    End If
+End Sub
+
+Sub SelecionarFolhasManualmente(drawDoc As DrawingDocument)
+    Dim nomesFolhas As New List(Of String)
+    For Each folha As Sheet In drawDoc.Sheets
+        nomesFolhas.Add(folha.Name)
+    Next
+
+    Dim frm As New System.Windows.Forms.Form
+    frm.Text = "Selecionar Folhas Manualmente"
+    frm.Width = 800
+    frm.Height = 600
+    frm.StartPosition = FormStartPosition.CenterScreen
+    frm.FormBorderStyle = FormBorderStyle.FixedDialog
+
+    Dim listBox As New System.Windows.Forms.ListBox
+    listBox.SetBounds(40, 40, 700, 400)
+    listBox.SelectionMode = SelectionMode.MultiExtended
+    For Each nome In nomesFolhas
+        listBox.Items.Add(nome)
+    Next
+
+    Dim btnOK As New System.Windows.Forms.Button
+    btnOK.Text = "OK"
+    btnOK.SetBounds(640, 470, 100, 40)
+    AddHandler btnOK.Click, Sub() frm.DialogResult = DialogResult.OK
+
+    frm.Controls.AddRange(New Control() {listBox, btnOK})
+
+    If frm.ShowDialog() = DialogResult.OK Then
+        Dim selecionadas As New List(Of String)
+        For Each item In listBox.SelectedItems
+            selecionadas.Add(item.ToString())
+        Next
+
+        For Each folha As Sheet In drawDoc.Sheets
+            folha.ExcludeFromPrinting = Not selecionadas.Contains(folha.Name)
+        Next
+
+        MessageBox.Show("Folhas selecionadas foram ativadas para impressão.", "Concluído", MessageBoxButtons.OK, MessageBoxIcon.Information)
+    End If
+End Sub
